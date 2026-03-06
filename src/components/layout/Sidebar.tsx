@@ -1,6 +1,5 @@
 import { NavLink } from "@/components/NavLink";
 import {
-  LayoutDashboard,
   PlusCircle,
   Briefcase,
   Users,
@@ -8,13 +7,14 @@ import {
   Table,
   Package,
   Trash2,
-  LogOut
+  LogOut,
+  Zap,
 } from "lucide-react";
 import { logout, getUsername, getUserRole, isAdmin } from "@/utils/auth";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import smelogo from './smelogo.jpeg'; // Your logo
+import smelogo from './smelogo.jpeg';
 
 const Sidebar = () => {
   const navigate = useNavigate();
@@ -28,71 +28,77 @@ const Sidebar = () => {
   };
 
   const menuItems = [
-    // { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-    { to: "/add-job", icon: PlusCircle, label: "Add Job" },
-    { to: "/manage-jobs", icon: Briefcase, label: "Manage Jobs" },
-    { to: "/customers", icon: Users, label: "Customers" },
-    { to: "/offices", icon: Building2, label: "Offices" },
-    { to: "/material-types", icon: Package, label: "Material Types" },
-    { to: "/sheet-view", icon: Table, label: "Sheet View" },
-    { to: "/recycle-bin", icon: Trash2, label: "Recycle Bin" },
+    { to: "/add-job",       icon: PlusCircle, label: "Add Job" },
+    { to: "/manage-jobs",   icon: Briefcase,  label: "Manage Jobs" },
+    { to: "/customers",     icon: Users,      label: "Customers" },
+    { to: "/offices",       icon: Building2,  label: "Offices" },
+    { to: "/material-types",icon: Package,    label: "Material Types" },
+    { to: "/sheet-view",    icon: Table,      label: "Sheet View" },
+    { to: "/recycle-bin",   icon: Trash2,     label: "Recycle Bin" },
   ];
 
   return (
-    <aside className="w-64 bg-sidebar text-sidebar-foreground min-h-screen flex flex-col">
-      {/* Logo & Title Section */}
-      <div className="p-6 border-b border-sidebar-border flex flex-col items-center">
-        <div className="mb-4">
-          <img 
-            src={smelogo} 
-            alt="SME Logo" 
-            className="w-32 h-auto object-contain drop-shadow-md 
-                       sm:w-36 
-                       md:w-40 
-                       lg:w-44 
-                       xl:w-48 
-                       transition-all duration-300"
-          />
+    <aside className="w-64 min-h-screen flex flex-col border-r border-sidebar-border bg-sidebar shadow-sm">
+
+      {/* Logo */}
+      <div className="px-6 py-5 border-b border-sidebar-border flex flex-col items-center gap-3">
+        <img
+          src={smelogo}
+          alt="SME Logo"
+          className="w-28 h-auto object-contain"
+        />
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-orange-500 flex items-center justify-center">
+            <Zap className="h-4 w-4 text-white" />
+          </div>
+          <div>
+            <p className="text-sm font-bold text-sidebar-foreground leading-none">Laser ERP</p>
+            <p className="text-xs text-muted-foreground">Management System</p>
+          </div>
         </div>
-        <h1 className="text-2xl font-bold text-sidebar-primary tracking-tight">
-          Job ERP
-        </h1>
-        <p className="text-sm text-sidebar-foreground/70 mt-1">
-          Management System
-        </p>
       </div>
 
-      {/* Navigation Menu */}
-      <nav className="flex-1 p-4 overflow-y-auto">
-        <ul className="space-y-1">
+      {/* Nav */}
+      <nav className="flex-1 px-3 py-4 overflow-y-auto">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest px-3 mb-3">
+          Menu
+        </p>
+        <ul className="space-y-0.5">
           {menuItems.map((item) => (
             <li key={item.to}>
               <NavLink
                 to={item.to}
-                className="flex items-center gap-3 px-4 py-3 rounded-lg text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all duration-200 group"
-                activeClassName="bg-sidebar-primary text-sidebar-primary-foreground font-semibold shadow-md"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all duration-150 text-sm font-medium group"
+                activeClassName="bg-orange-50 text-orange-600 font-semibold border border-orange-200"
               >
-                <item.icon className="h-5 w-5 transition-transform group-hover:scale-110" />
-                <span className="text-sm">{item.label}</span>
+                <item.icon className="h-4 w-4 shrink-0" />
+                {item.label}
               </NavLink>
             </li>
           ))}
         </ul>
       </nav>
 
-      {/* Logout Button */}
-      <div className="p-4 border-t border-sidebar-border">
-        <div className="mb-3 p-3 bg-sidebar-accent rounded-lg">
-          <p className="text-xs text-sidebar-foreground/60 mb-1">Logged in as</p>
-          <p className="font-semibold text-sidebar-foreground">{username}</p>
-          <Badge variant={adminUser ? "default" : "secondary"} className="mt-1">
-            {role === "admin" ? "Admin" : "User"}
-          </Badge>
+      {/* User + Logout */}
+      <div className="px-4 py-4 border-t border-sidebar-border space-y-3">
+        <div className="flex items-center gap-3 p-3 bg-orange-50 rounded-xl border border-orange-100">
+          <div className="w-9 h-9 rounded-full bg-orange-500 flex items-center justify-center text-white font-bold text-sm shrink-0">
+            {username?.[0]?.toUpperCase() || "U"}
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-sidebar-foreground truncate">{username}</p>
+            <Badge
+              variant={adminUser ? "default" : "secondary"}
+              className={`text-xs mt-0.5 ${adminUser ? "bg-orange-500 hover:bg-orange-600" : ""}`}
+            >
+              {role === "admin" ? "Admin" : "User"}
+            </Badge>
+          </div>
         </div>
         <Button
           onClick={handleLogout}
-          variant="destructive"
-          className="w-full flex items-center justify-center gap-2 hover:gap-3 transition-all duration-200 font-medium"
+          variant="outline"
+          className="w-full flex items-center gap-2 text-red-500 border-red-200 hover:bg-red-50 hover:text-red-600 hover:border-red-300 font-medium"
         >
           <LogOut className="h-4 w-4" />
           Logout
