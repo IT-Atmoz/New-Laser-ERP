@@ -6,16 +6,13 @@ export type UserRole = "admin" | "user";
 export const setupUsers = async () => {
   const users = [
     { username: "admin123", password: "admin123@@#", role: "admin" as UserRole },
-    { username: "lokesh", password: "lok123", role: "user" as UserRole },
+    { username: "lokesh", password: "lok123", role: "admin" as UserRole },
   ];
   for (const user of users) {
-    const snap = await get(ref(db, `users/${user.username}`));
-    if (!snap.exists()) {
-      await set(ref(db, `users/${user.username}`), {
-        password: user.password,
-        role: user.role,
-      });
-    }
+    await set(ref(db, `users/${user.username}`), {
+      password: user.password,
+      role: user.role,
+    });
   }
 };
 

@@ -34,7 +34,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { PlusCircle, Trash2, Edit, Users, Mail, Phone, MapPin, FileText, Save, X } from "lucide-react";
+import { PlusCircle, Trash2, Edit, Users, Mail, Phone, MapPin, FileText, Save, X, Search } from "lucide-react";
 import { moveToRecycleBin } from "@/utils/recycleBinUtils";
 import { isAdmin } from "@/utils/auth";
 
@@ -52,6 +52,7 @@ interface Customer {
 const Customers = () => {
   const { toast } = useToast();
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const hasEditPermission = isAdmin(); // Only used for Edit & Delete
 
   // Dialog States
@@ -106,6 +107,18 @@ const Customers = () => {
   const handleAddCustomer = async () => {
     if (!addForm.firstName.trim()) {
       toast({ title: "Error", description: "First name is required", variant: "destructive" });
+      return;
+    }
+    const newFullName = `${addForm.firstName.trim()} ${addForm.lastName.trim()}`.trim().toLowerCase();
+    const duplicate = customers.find(
+      (c) => `${c.firstName} ${c.lastName}`.trim().toLowerCase() === newFullName
+    );
+    if (duplicate) {
+      toast({
+        title: "Already Exists",
+        description: `A customer named "${duplicate.fullName}" already exists.`,
+        variant: "destructive",
+      });
       return;
     }
     try {
@@ -269,74 +282,98 @@ const Customers = () => {
         {/* Customers Table */}
         <Card className="shadow-xl">
           <CardHeader>
-            <CardTitle className="text-2xl">All Customers ({customers.length})</CardTitle>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <CardTitle className="text-2xl">All Customers ({customers.length})</CardTitle>
+              <div className="relative max-w-xs w-full">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search customers..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            {customers.length === 0 ? (
-              <div className="text-center py-16 text-muted-foreground">
-                <Users className="h-16 w-16 mx-auto mb-4 opacity-20" />
-                <p className="text-lg">No customers added yet</p>
-                <p className="text-sm mt-2">Start by adding your first customer above</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="font-bold">Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Phone</TableHead>
-                      <TableHead>GST</TableHead>
-                      <TableHead>Address</TableHead>
-                      <TableHead className="text-right w-32">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {customers.map((customer) => (
-                      <TableRow key={customer.id} className="hover:bg-muted/50 transition-colors">
-                        <TableCell className="font-semibold text-lg">
-                          {customer.fullName || "Unnamed"}
-                        </TableCell>
-                        <TableCell>{customer.email || "—"}</TableCell>
-                        <TableCell>{customer.phone || "—"}</TableCell>
-                        <TableCell>
-                          {customer.gst ? (
-                            <code className="text-xs bg-primary/10 text-primary px-2 py-1 rounded font-mono">
-                              {customer.gst}
-                            </code>
-                          ) : "—"}
-                        </TableCell>
-                        <TableCell className="max-w-xs truncate">
-                          {customer.address || "—"}
-                        </TableCell>
-                        <TableCell className="text-right space-x-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => openEditDialog(customer)}
-                            className="hover:bg-blue-50"
-                            disabled={!hasEditPermission}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => {
-                              setCustomerToDelete(customer);
-                              setDeleteDialogOpen(true);
-                            }}
-                            disabled={!hasEditPermission}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
+            {(() => {
+              const q = searchQuery.trim().toLowerCase();
+              const filtered = q
+                ? customers.filter(
+                    (c) =>
+                      c.fullName.toLowerCase().includes(q) ||
+                      c.email.toLowerCase().includes(q) ||
+                      c.phone.toLowerCase().includes(q) ||
+                      c.gst.toLowerCase().includes(q) ||
+                      c.address.toLowerCase().includes(q)
+                  )
+                : customers;
+              return filtered.length === 0 ? (
+                <div className="text-center py-16 text-muted-foreground">
+                  <Users className="h-16 w-16 mx-auto mb-4 opacity-20" />
+                  <p className="text-lg">{q ? "No customers match your search" : "No customers added yet"}</p>
+                  <p className="text-sm mt-2">{q ? "Try a different search term" : "Start by adding your first customer above"}</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="font-bold">Name</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead>Phone</TableHead>
+                        <TableHead>GST</TableHead>
+                        <TableHead>Address</TableHead>
+                        <TableHead className="text-right w-32">Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
+                    </TableHeader>
+                    <TableBody>
+                      {filtered.map((customer) => (
+                        <TableRow key={customer.id} className="hover:bg-muted/50 transition-colors">
+                          <TableCell className="font-semibold text-lg">
+                            {customer.fullName || "Unnamed"}
+                          </TableCell>
+                          <TableCell>{customer.email || "—"}</TableCell>
+                          <TableCell>{customer.phone || "—"}</TableCell>
+                          <TableCell>
+                            {customer.gst ? (
+                              <code className="text-xs bg-primary/10 text-primary px-2 py-1 rounded font-mono">
+                                {customer.gst}
+                              </code>
+                            ) : "—"}
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate">
+                            {customer.address || "—"}
+                          </TableCell>
+                          <TableCell className="text-right space-x-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openEditDialog(customer)}
+                              className="hover:bg-blue-50"
+                              disabled={!hasEditPermission}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => {
+                                setCustomerToDelete(customer);
+                                setDeleteDialogOpen(true);
+                              }}
+                              disabled={!hasEditPermission}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
 

@@ -64,11 +64,11 @@ export function ComboboxInput({
             className
           )}
         >
-          <span className="truncate">{inputValue || placeholder}</span>
+          <span className="overflow-hidden">{inputValue || placeholder}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-full p-0 popover-content-width" align="start">
+      <PopoverContent className="min-w-[320px] w-auto p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
             placeholder="Type to search or add new..."
@@ -95,7 +95,7 @@ export function ComboboxInput({
                     key={option.value}
                     value={option.value}
                     onSelect={() => handleSelect(option.value)}
-                    className="cursor-pointer"
+                    className="cursor-pointer whitespace-normal break-words"
                   >
                     <Check
                       className={cn(

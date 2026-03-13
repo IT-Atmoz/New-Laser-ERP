@@ -149,7 +149,7 @@ const ManageJobs = () => {
       const jobsList: Job[] = Object.entries(data).map(([id, j]: [string, any]) => ({
         id,
         date: j.date || "",
-        customerName: j.customerName || "",
+        customerName: j.customerName || j.customer || "",
         officeName: j.officeName || "",
         materialType: j.materialType || "MS",
         thickness: String(j.thickness ?? ""),
@@ -167,7 +167,7 @@ const ManageJobs = () => {
         bendingHours: String(j.bendingHours ?? "0"),
         bendingRatePerHour: String(j.bendingRatePerHour ?? "1300"),
         bendingCharge: String(j.bendingCharge ?? "0.00"),
-        totalPrice: String(j.totalPrice ?? "0.00"),
+        totalPrice: String(j.totalPrice ?? j.totalAmount ?? "0.00"),
         description: j.description || "",
         paymentStatus: j.paymentStatus || "Non-Billed",
         customerDetails: j.customerDetails || null,

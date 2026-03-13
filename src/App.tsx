@@ -17,6 +17,7 @@ const MaterialTypes = lazy(() => import("./pages/MaterialTypes"));
 const Thickness = lazy(() => import("./pages/Thickness"));
 const Dimensions = lazy(() => import("./pages/Dimensions"));
 const SheetView = lazy(() => import("./pages/SheetView"));
+const Models = lazy(() => import("./pages/Models"));
 const RecycleBin = lazy(() => import("./pages/RecycleBin"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -43,6 +44,7 @@ const App = () => {
             <Route path="/customers" element={<Customers />} />
             <Route path="/offices" element={<Offices />} />
             <Route path="/material-types" element={<MaterialTypes />} />
+            <Route path="/models" element={<Models />} />
             <Route path="/thickness" element={<Thickness />} />
             <Route path="/dimensions" element={<Dimensions />} />
             <Route path="/sheet-view" element={<SheetView />} />

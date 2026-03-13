@@ -1,6 +1,5 @@
-// src/pages/RateChartMaster.tsx → FINAL FIXED & CLEAN VERSION (2025)
 import { useEffect, useState } from "react";
-import { ref, onValue, set, push, remove, get } from "firebase/database";
+import { ref, onValue, set, push, remove } from "firebase/database";
 import { db } from "@/config/firebase";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,213 +28,165 @@ import { Package, Plus, Save, X, Edit, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { isAdmin } from "@/utils/auth";
 
-// Initial rates (from your PDF)
-const INITIAL_RATES = {
-  MS: [
-    { thickness: 1, runningMeter: 8, piercing: 0.6 },
-    { thickness: 1.5, runningMeter: 13, piercing: 0.8 },
-    { thickness: 2, runningMeter: 16, piercing: 1 },
-    { thickness: 3, runningMeter: 24, piercing: 1.5 },
-    { thickness: 4, runningMeter: 28, piercing: 2 },
-    { thickness: 5, runningMeter: 32, piercing: 2.5 },
-    { thickness: 6, runningMeter: 40, piercing: 3 },
-    { thickness: 8, runningMeter: 60, piercing: 4 },
-    { thickness: 10, runningMeter: 70, piercing: 5 },
-    { thickness: 12, runningMeter: 90, piercing: 6 },
-    { thickness: 16, runningMeter: 160, piercing: 8 },
-  ],
-  SS: [
-    { thickness: 0.5, runningMeter: 14, piercing: 0.5 },
-    { thickness: 0.6, runningMeter: 14, piercing: 0.5 },
-    { thickness: 1, runningMeter: 22, piercing: 1 },
-    { thickness: 1.5, runningMeter: 28, piercing: 1 },
-    { thickness: 2, runningMeter: 40, piercing: 1 },
-    { thickness: 2.5, runningMeter: 70, piercing: 2.5 },
-    { thickness: 3, runningMeter: 90, piercing: 3 },
-    { thickness: 4, runningMeter: 130, piercing: 4 },
-  ],
-  AL: [
-    { thickness: 1, runningMeter: 20, piercing: 1 },
-    { thickness: 1.5, runningMeter: 30, piercing: 1.5 },
-    { thickness: 2, runningMeter: 40, piercing: 2 },
-    { thickness: 3, runningMeter: 60, piercing: 3 },
-    { thickness: 4, runningMeter: 80, piercing: 4 },
-    { thickness: 5, runningMeter: 100, piercing: 5 },
-  ],
-  GI: [
-    { thickness: 0.5, runningMeter: 10, piercing: 0.6 },
-    { thickness: 1, runningMeter: 15, piercing: 1 },
-    { thickness: 1.5, runningMeter: 20, piercing: 1 },
-    { thickness: 2, runningMeter: 30, piercing: 1.5 },
-  ],
-  BRASS: [
-    { thickness: 1, runningMeter: 30, piercing: 1 },
-    { thickness: 1.5, runningMeter: 45, piercing: 1.5 },
-    { thickness: 2, runningMeter: 60, piercing: 2 },
-    { thickness: 3, runningMeter: 90, piercing: 3 },
-  ],
-};
-
-type Material = "MS" | "SS" | "AL" | "GI" | "BRASS";
-
 interface RateRow {
-  id?: string;
   thickness: number;
   runningMeter: number;
   piercing: number;
 }
 
-const RateChartMaster = () => {
+const MaterialTypes = () => {
   const { toast } = useToast();
-  const [rates, setRates] = useState<Record<Material, Record<string, RateRow>>>({
-    MS: {}, SS: {}, AL: {}, GI: {}, BRASS: {}
-  });
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValues, setEditValues] = useState<Partial<RateRow>>({});
-  const [newRow, setNewRow] = useState({
-    material: "MS" as Material,
-    thickness: "",
-    runningMeter: "",
-    piercing: ""
-  });
-  const [deleteDialog, setDeleteDialog] = useState<{ material: Material; id: string } | null>(null);
-  const [loading, setLoading] = useState(true);
-
   const hasEditPermission = isAdmin();
 
-  // Seed initial data properly using push() → avoids numeric keys forever
-  const seedInitialData = async () => {
-    const ratesRef = ref(db, "materialRates");
-    const snapshot = await get(ratesRef);
-    const exists = snapshot.exists() && Object.keys(snapshot.val() || {}).length > 0;
+  // Dynamic material names from Firebase
+  const [materialNames, setMaterialNames] = useState<{ id: string; name: string }[]>([]);
+  // Rates keyed by material name
+  const [rates, setRates] = useState<Record<string, Record<string, RateRow>>>({});
 
-    if (!exists) {
-      const writePromises = Object.entries(INITIAL_RATES).map(([material, rows]) => {
-        const materialRef = ref(db, `materialRates/${material}`);
-        const promises = rows.map(row => {
-          const newRef = push(materialRef); // Always use push → random key
-          return set(newRef, row);
-        });
-        return Promise.all(promises);
-      });
+  // Add new material type
+  const [newMaterial, setNewMaterial] = useState("");
 
-      await Promise.all(writePromises);
-      toast({
-        title: "Rate Chart Initialized",
-        description: "All default rates have been imported successfully!",
-      });
-    }
-  };
+  // Add new rate row
+  const [newRate, setNewRate] = useState({ material: "", thickness: "", runningMeter: "", piercing: "" });
 
-  // Load rates + seed if empty
+  // Edit
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<Partial<RateRow>>({});
+
+  // Dialogs
+  const [deleteRateDialog, setDeleteRateDialog] = useState<{ material: string; id: string } | null>(null);
+  const [deleteMaterialDialog, setDeleteMaterialDialog] = useState<{ id: string; name: string } | null>(null);
+
+  const [loading, setLoading] = useState(true);
+
+  // Load material names
   useEffect(() => {
-    const ratesRef = ref(db, "materialRates");
-
-    const unsubscribe = onValue(ratesRef, async (snapshot) => {
-      const data = snapshot.val();
-
+    const unsub = onValue(ref(db, "materialTypes"), (snap) => {
+      const data = snap.val();
       if (data) {
-        // Normalize: ensure every material has object structure (not array)
-        const normalized: Record<Material, Record<string, RateRow>> = {
-          MS: {}, SS: {}, AL: {}, GI: {}, BRASS: {}
-        };
-
-        Object.entries(data).forEach(([mat, value]) => {
-          const material = mat as Material;
-          if (normalized[material]) {
-            // If it's an array → convert to object with push keys (safe migration)
-            if (Array.isArray(value)) {
-              value.forEach((row: any, index) => {
-                if (row && typeof row === "object") {
-                  normalized[material][`legacy_${index}`] = row;
-                }
-              });
-            } else if (typeof value === "object" && value !== null) {
-              normalized[material] = value as Record<string, RateRow>;
-            }
-          }
-        });
-
-        setRates(normalized);
+        const list = Object.entries(data).map(([id, v]: [string, any]) => ({ id, name: v.name }));
+        list.sort((a, b) => a.name.localeCompare(b.name));
+        setMaterialNames(list);
+        // Set first material as default for new rate if not set
+        setNewRate(prev => prev.material ? prev : { ...prev, material: list[0]?.name || "" });
       } else {
-        // First time → seed clean data
-        await seedInitialData();
+        setMaterialNames([]);
       }
       setLoading(false);
     });
-
-    return () => unsubscribe();
+    return () => unsub();
   }, []);
 
-  const startEdit = (material: Material, id: string, row: RateRow) => {
-    setEditingId(`${material}-${id}`);
-    setEditValues({
-      thickness: row.thickness,
-      runningMeter: row.runningMeter,
-      piercing: row.piercing,
+  // Load rates
+  useEffect(() => {
+    const unsub = onValue(ref(db, "materialRates"), (snap) => {
+      const data = snap.val();
+      if (data) {
+        const normalized: Record<string, Record<string, RateRow>> = {};
+        Object.entries(data).forEach(([mat, value]: [string, any]) => {
+          if (typeof value === "object" && value !== null) {
+            normalized[mat] = value as Record<string, RateRow>;
+          }
+        });
+        setRates(normalized);
+      } else {
+        setRates({});
+      }
     });
+    return () => unsub();
+  }, []);
+
+  // Add new material type
+  const handleAddMaterial = async () => {
+    const name = newMaterial.trim().toUpperCase();
+    if (!name) {
+      toast({ title: "Error", description: "Material name is required", variant: "destructive" });
+      return;
+    }
+    if (materialNames.some(m => m.name === name)) {
+      toast({ title: "Already Exists", description: `"${name}" already exists`, variant: "destructive" });
+      return;
+    }
+    try {
+      await push(ref(db, "materialTypes"), { name });
+      toast({ title: "Added", description: `Material "${name}" added` });
+      setNewMaterial("");
+    } catch {
+      toast({ title: "Error", description: "Failed to add material", variant: "destructive" });
+    }
   };
 
-  const saveEdit = async (material: Material, id: string) => {
+  // Delete material type + all its rates
+  const handleDeleteMaterial = async () => {
+    if (!deleteMaterialDialog) return;
+    try {
+      await remove(ref(db, `materialTypes/${deleteMaterialDialog.id}`));
+      await remove(ref(db, `materialRates/${deleteMaterialDialog.name}`));
+      toast({ title: "Deleted", description: `"${deleteMaterialDialog.name}" and its rates removed` });
+    } catch {
+      toast({ title: "Error", description: "Failed to delete material", variant: "destructive" });
+    } finally {
+      setDeleteMaterialDialog(null);
+    }
+  };
+
+  // Add rate row
+  const handleAddRate = async () => {
+    const { material, thickness, runningMeter, piercing } = newRate;
+    if (!material || !thickness || !runningMeter || !piercing) {
+      toast({ title: "Error", description: "All fields required", variant: "destructive" });
+      return;
+    }
+    const t = parseFloat(thickness), rm = parseFloat(runningMeter), p = parseFloat(piercing);
+    if (isNaN(t) || isNaN(rm) || isNaN(p)) {
+      toast({ title: "Invalid", description: "Enter valid numbers", variant: "destructive" });
+      return;
+    }
+    try {
+      const newRef = push(ref(db, `materialRates/${material}`));
+      await set(newRef, { thickness: t, runningMeter: rm, piercing: p });
+      toast({ title: "Added", description: "Rate added!" });
+      setNewRate({ ...newRate, thickness: "", runningMeter: "", piercing: "" });
+    } catch {
+      toast({ title: "Error", description: "Failed to add rate", variant: "destructive" });
+    }
+  };
+
+  // Edit rate
+  const startEdit = (material: string, id: string, row: RateRow) => {
+    setEditingId(`${material}-${id}`);
+    setEditValues({ thickness: row.thickness, runningMeter: row.runningMeter, piercing: row.piercing });
+  };
+
+  const saveEdit = async (material: string, id: string) => {
     if (!editValues.thickness || !editValues.runningMeter || !editValues.piercing) {
       toast({ title: "Error", description: "All fields required", variant: "destructive" });
       return;
     }
-
     try {
       await set(ref(db, `materialRates/${material}/${id}`), {
         thickness: Number(editValues.thickness),
         runningMeter: Number(editValues.runningMeter),
         piercing: Number(editValues.piercing),
       });
-      toast({ title: "Success", description: "Rate updated successfully" });
+      toast({ title: "Updated", description: "Rate updated" });
       setEditingId(null);
       setEditValues({});
-    } catch (err) {
-      toast({ title: "Error", description: "Failed to update rate", variant: "destructive" });
+    } catch {
+      toast({ title: "Error", description: "Failed to update", variant: "destructive" });
     }
   };
 
-  const cancelEdit = () => {
-    setEditingId(null);
-    setEditValues({});
-  };
-
-  const addNewRate = async () => {
-    const { material, thickness, runningMeter, piercing } = newRow;
-    if (!thickness || !runningMeter || !piercing) {
-      toast({ title: "Error", description: "All fields required", variant: "destructive" });
-      return;
-    }
-
-    const t = parseFloat(thickness);
-    const rm = parseFloat(runningMeter);
-    const p = parseFloat(piercing);
-
-    if (isNaN(t) || isNaN(rm) || isNaN(p)) {
-      toast({ title: "Invalid", description: "Please enter valid numbers", variant: "destructive" });
-      return;
-    }
-
+  // Delete rate row
+  const confirmDeleteRate = async () => {
+    if (!deleteRateDialog) return;
     try {
-      const newRef = push(ref(db, `materialRates/${material}`));
-      await set(newRef, { thickness: t, runningMeter: rm, piercing: p });
-      toast({ title: "Added", description: "New rate added!" });
-      setNewRow({ ...newRow, thickness: "", runningMeter: "", piercing: "" });
-    } catch (err) {
-      toast({ title: "Error", description: "Failed to add rate", variant: "destructive" });
-    }
-  };
-
-  const confirmDelete = async () => {
-    if (!deleteDialog) return;
-    try {
-      await remove(ref(db, `materialRates/${deleteDialog.material}/${deleteDialog.id}`));
-      toast({ title: "Deleted", description: "Rate removed permanently" });
-    } catch (err) {
+      await remove(ref(db, `materialRates/${deleteRateDialog.material}/${deleteRateDialog.id}`));
+      toast({ title: "Deleted", description: "Rate removed" });
+    } catch {
       toast({ title: "Error", description: "Failed to delete", variant: "destructive" });
     } finally {
-      setDeleteDialog(null);
+      setDeleteRateDialog(null);
     }
   };
 
@@ -243,8 +194,8 @@ const RateChartMaster = () => {
     return (
       <DashboardLayout>
         <div className="p-10 text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent"></div>
-          <p className="mt-4 text-lg">Loading Rate Chart...</p>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-primary border-t-transparent" />
+          <p className="mt-4 text-lg">Loading...</p>
         </div>
       </DashboardLayout>
     );
@@ -252,60 +203,127 @@ const RateChartMaster = () => {
 
   return (
     <DashboardLayout>
-      <div className="p-6 max-w-7xl mx-auto space-y-8">
+      <div className="p-6 w-full space-y-8">
+
+        {/* Header */}
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-4xl font-bold flex items-center gap-3">
               <Package className="h-10 w-10 text-primary" />
-              Rate Chart Master
+              Material Types
             </h1>
-            <p className="text-muted-foreground mt-2">Manage laser cutting rates by material & thickness</p>
+            <p className="text-muted-foreground mt-2">Add custom materials and manage their rates</p>
           </div>
           <Badge variant="secondary" className="text-lg px-6 py-3">Live in Database</Badge>
         </div>
 
-        {/* Add New Rate – All Users */}
+        {/* Add New Material Type */}
         <Card className="border-2 border-dashed border-primary/30 bg-primary/5">
           <CardHeader>
             <CardTitle className="text-xl flex items-center gap-3">
-              <Plus className="h-6 w-6" />
-              Add New Rate (All Users)
+              <Plus className="h-6 w-6" /> Add New Material Type
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-4 items-end">
-              <div className="min-w-32">
-                <label className="text-sm font-medium">Material</label>
-                <Select value={newRow.material} onValueChange={(v) => setNewRow({ ...newRow, material: v as Material })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {["MS", "SS", "AL", "GI", "BRASS"].map(m => (
-                      <SelectItem key={m} value={m}>{m === "AL" ? "ALUMINIUM" : m}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="flex gap-4 items-end">
+              <div className="flex-1 max-w-xs">
+                <label className="text-sm font-medium mb-1 block">Material Name</label>
+                <Input
+                  placeholder="e.g. WOOD, ACRYLIC, PVC..."
+                  value={newMaterial}
+                  onChange={e => setNewMaterial(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && handleAddMaterial()}
+                />
               </div>
-              <Input placeholder="Thickness (mm)" value={newRow.thickness} onChange={e => setNewRow({ ...newRow, thickness: e.target.value })} className="w-40" type="number" step="0.1" />
-              <Input placeholder="Running Meter Rate" value={newRow.runningMeter} onChange={e => setNewRow({ ...newRow, runningMeter: e.target.value })} className="w-48" type="number" step="0.1" />
-              <Input placeholder="Piercing Rate" value={newRow.piercing} onChange={e => setNewRow({ ...newRow, piercing: e.target.value })} className="w-40" type="number" step="0.1" />
-              <Button onClick={addNewRate} size="lg" className="gap-2">
-                <Plus className="h-5 w-5" /> Add Rate
+              <Button onClick={handleAddMaterial} size="lg" className="gap-2">
+                <Plus className="h-5 w-5" /> Add Material
               </Button>
             </div>
+
+            {/* Material chips */}
+            {materialNames.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-4">
+                {materialNames.map(m => (
+                  <div key={m.id} className="flex items-center gap-1 bg-primary/10 text-primary px-3 py-1 rounded-full text-sm font-medium">
+                    {m.name}
+                    {hasEditPermission && (
+                      <button
+                        onClick={() => setDeleteMaterialDialog({ id: m.id, name: m.name })}
+                        className="ml-1 text-red-500 hover:text-red-700"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Material Tables */}
-        {(["MS", "SS", "AL", "GI", "BRASS"] as Material[]).map((material) => {
-          const materialRates = rates[material] || {};
-          const entries = Object.entries(materialRates);
+        {/* Add Rate Row */}
+        {materialNames.length > 0 && (
+          <Card className="border-2 border-dashed border-green-300 bg-green-50/30">
+            <CardHeader>
+              <CardTitle className="text-xl flex items-center gap-3">
+                <Plus className="h-6 w-6 text-green-600" /> Add Rate
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-4 items-end">
+                <div className="min-w-40">
+                  <label className="text-sm font-medium mb-1 block">Material</label>
+                  <Select
+                    value={newRate.material}
+                    onValueChange={v => setNewRate({ ...newRate, material: v })}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Select material" /></SelectTrigger>
+                    <SelectContent>
+                      {materialNames.map(m => (
+                        <SelectItem key={m.id} value={m.name}>{m.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Thickness (mm)</label>
+                  <Input placeholder="e.g. 1.5" value={newRate.thickness} onChange={e => setNewRate({ ...newRate, thickness: e.target.value })} className="w-36" type="number" step="0.1" />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Running Meter Rate</label>
+                  <Input placeholder="e.g. 20" value={newRate.runningMeter} onChange={e => setNewRate({ ...newRate, runningMeter: e.target.value })} className="w-44" type="number" step="0.1" />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Piercing Rate</label>
+                  <Input placeholder="e.g. 1.5" value={newRate.piercing} onChange={e => setNewRate({ ...newRate, piercing: e.target.value })} className="w-36" type="number" step="0.1" />
+                </div>
+                <Button onClick={handleAddRate} size="lg" className="gap-2">
+                  <Plus className="h-5 w-5" /> Add Rate
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
+        {/* No materials yet */}
+        {materialNames.length === 0 && (
+          <div className="text-center py-20 text-muted-foreground border-2 border-dashed rounded-xl">
+            <Package className="h-16 w-16 mx-auto mb-4 opacity-20" />
+            <p className="text-lg">No materials added yet</p>
+            <p className="text-sm mt-1">Add your first material type above</p>
+          </div>
+        )}
+
+        {/* Rate Tables per Material */}
+        {materialNames.map(({ name }) => {
+          const materialRates = rates[name] || {};
+          const entries = Object.entries(materialRates);
           return (
-            <Card key={material} className="overflow-hidden shadow-lg">
+            <Card key={name} className="overflow-hidden shadow-lg">
               <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5">
                 <CardTitle className="text-2xl font-bold flex items-center gap-3">
                   <Package className="h-8 w-8" />
-                  {material === "AL" ? "ALUMINIUM" : material}
+                  {name}
                   <Badge variant="secondary" className="ml-4">{entries.length} Rates</Badge>
                 </CardTitle>
               </CardHeader>
@@ -313,7 +331,7 @@ const RateChartMaster = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-32 font-bold">Thickness</TableHead>
+                      <TableHead className="w-32 font-bold">Thickness (mm)</TableHead>
                       <TableHead className="font-bold">Running Meter Rate</TableHead>
                       <TableHead className="font-bold">Piercing Rate</TableHead>
                       <TableHead className="text-right w-32 font-bold">Actions</TableHead>
@@ -322,42 +340,26 @@ const RateChartMaster = () => {
                   <TableBody>
                     {entries.length > 0 ? (
                       entries.map(([id, row]) => {
-                        const isEditing = editingId === `${material}-${id}`;
+                        const isEditing = editingId === `${name}-${id}`;
                         return (
                           <TableRow key={id} className="hover:bg-muted/50">
                             <TableCell>
                               {isEditing ? (
-                                <Input
-                                  value={editValues.thickness ?? row.thickness}
-                                  onChange={(e) => setEditValues({ ...editValues, thickness: Number(e.target.value) || 0 })}
-                                  type="number"
-                                  step="0.1"
-                                  className="w-24"
-                                />
+                                <Input value={editValues.thickness ?? row.thickness} onChange={e => setEditValues({ ...editValues, thickness: Number(e.target.value) || 0 })} type="number" step="0.1" className="w-24" />
                               ) : (
                                 <span className="font-medium">{row.thickness}</span>
                               )}
                             </TableCell>
                             <TableCell>
                               {isEditing ? (
-                                <Input
-                                  value={editValues.runningMeter ?? row.runningMeter}
-                                  onChange={(e) => setEditValues({ ...editValues, runningMeter: Number(e.target.value) || 0 })}
-                                  type="number"
-                                  step="0.1"
-                                />
+                                <Input value={editValues.runningMeter ?? row.runningMeter} onChange={e => setEditValues({ ...editValues, runningMeter: Number(e.target.value) || 0 })} type="number" step="0.1" />
                               ) : (
                                 <span className="font-semibold text-green-700">₹{row.runningMeter}</span>
                               )}
                             </TableCell>
                             <TableCell>
                               {isEditing ? (
-                                <Input
-                                  value={editValues.piercing ?? row.piercing}
-                                  onChange={(e) => setEditValues({ ...editValues, piercing: Number(e.target.value) || 0 })}
-                                  type="number"
-                                  step="0.1"
-                                />
+                                <Input value={editValues.piercing ?? row.piercing} onChange={e => setEditValues({ ...editValues, piercing: Number(e.target.value) || 0 })} type="number" step="0.1" />
                               ) : (
                                 <span className="font-semibold text-blue-700">₹{row.piercing}</span>
                               )}
@@ -365,32 +367,15 @@ const RateChartMaster = () => {
                             <TableCell className="text-right space-x-2">
                               {isEditing ? (
                                 <>
-                                  <Button size="sm" onClick={() => saveEdit(material, id)}>
-                                    <Save className="h-4 w-4" />
-                                  </Button>
-                                  <Button size="sm" variant="outline" onClick={cancelEdit}>
-                                    <X className="h-4 w-4" />
-                                  </Button>
+                                  <Button size="sm" onClick={() => saveEdit(name, id)}><Save className="h-4 w-4" /></Button>
+                                  <Button size="sm" variant="outline" onClick={() => { setEditingId(null); setEditValues({}); }}><X className="h-4 w-4" /></Button>
                                 </>
                               ) : (
                                 <>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => startEdit(material, id, row)}
-                                    disabled={!hasEditPermission}
-                                    title={hasEditPermission ? "Edit" : "Admin only"}
-                                  >
+                                  <Button size="sm" variant="ghost" onClick={() => startEdit(name, id, row)} disabled={!hasEditPermission}>
                                     <Edit className="h-4 w-4" />
                                   </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="text-red-600 hover:bg-red-50"
-                                    onClick={() => setDeleteDialog({ material, id })}
-                                    disabled={!hasEditPermission}
-                                    title={hasEditPermission ? "Delete" : "Admin only"}
-                                  >
+                                  <Button size="sm" variant="ghost" className="text-red-600 hover:bg-red-50" onClick={() => setDeleteRateDialog({ material: name, id })} disabled={!hasEditPermission}>
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
                                 </>
@@ -402,7 +387,7 @@ const RateChartMaster = () => {
                     ) : (
                       <TableRow>
                         <TableCell colSpan={4} className="text-center py-10 text-muted-foreground">
-                          No rates defined yet
+                          No rates added yet for {name}
                         </TableCell>
                       </TableRow>
                     )}
@@ -413,26 +398,39 @@ const RateChartMaster = () => {
           );
         })}
 
-        {/* Delete Confirmation */}
-        <AlertDialog open={!!deleteDialog} onOpenChange={() => setDeleteDialog(null)}>
+        {/* Delete Rate Row Dialog */}
+        <AlertDialog open={!!deleteRateDialog} onOpenChange={() => setDeleteRateDialog(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete Rate Permanently?</AlertDialogTitle>
+              <AlertDialogTitle>Delete Rate?</AlertDialogTitle>
+              <AlertDialogDescription>This rate will be permanently removed.</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmDeleteRate} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Delete Material Type Dialog */}
+        <AlertDialog open={!!deleteMaterialDialog} onOpenChange={() => setDeleteMaterialDialog(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete "{deleteMaterialDialog?.name}"?</AlertDialogTitle>
               <AlertDialogDescription>
-                This action cannot be undone. This rate will be removed from all calculations.
+                This will remove the material type and ALL its rates permanently.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground">
-                Delete Forever
-              </AlertDialogAction>
+              <AlertDialogAction onClick={handleDeleteMaterial} className="bg-destructive text-destructive-foreground">Delete</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
       </div>
     </DashboardLayout>
   );
 };
 
-export default RateChartMaster;
+export default MaterialTypes;

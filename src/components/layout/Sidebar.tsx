@@ -6,6 +6,7 @@ import {
   Building2,
   Table,
   Package,
+  Layers,
   Trash2,
   LogOut,
   Zap,
@@ -33,6 +34,7 @@ const Sidebar = () => {
     { to: "/customers",     icon: Users,      label: "Customers" },
     { to: "/offices",       icon: Building2,  label: "Offices" },
     { to: "/material-types",icon: Package,    label: "Material Types" },
+    { to: "/models",        icon: Layers,     label: "Models" },
     { to: "/sheet-view",    icon: Table,      label: "Sheet View" },
     { to: "/recycle-bin",   icon: Trash2,     label: "Recycle Bin" },
   ];

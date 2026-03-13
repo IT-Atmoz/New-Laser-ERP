@@ -22,11 +22,13 @@ const AddJob = () => {
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [materialTypes, setMaterialTypes] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
     date: format(new Date(), "yyyy-MM-dd"),
     customer: "",
     sizeModel: "",
+    pixel: "",
     no: "",
     projectName: "",
     quantity: "",
@@ -42,7 +44,7 @@ const AddJob = () => {
   const quantity = parseFloat(formData.quantity) || 0;
   const pricePerSqft = parseFloat(formData.pricePerSqft) || 0;
 
-  const totSize = length * width;
+  const totSize = (length / 304) * (width / 304);
   const totSqft = totSize * quantity;
   const price = totSqft * pricePerSqft;
   const totalAmount = price;
@@ -59,6 +61,22 @@ const AddJob = () => {
           fullName: `${c.firstName || ""} ${c.lastName || ""}`.trim(),
         }));
         setCustomers(list);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // Load material types (used as Models options)
+  useEffect(() => {
+    const unsub = onValue(ref(db, "materialTypes"), (snap) => {
+      const data = snap.val();
+      if (data) {
+        const list = Object.entries(data)
+          .map(([, v]: [string, any]) => v.name as string)
+          .sort();
+        setMaterialTypes(list);
+      } else {
+        setMaterialTypes([]);
       }
     });
     return () => unsub();
@@ -82,6 +100,7 @@ const AddJob = () => {
         date: formData.date,
         customer: formData.customer,
         sizeModel: formData.sizeModel,
+        pixel: formData.pixel,
         no: formData.no,
         projectName: formData.projectName,
         quantity: quantity,
@@ -100,6 +119,7 @@ const AddJob = () => {
         date: format(new Date(), "yyyy-MM-dd"),
         customer: "",
         sizeModel: "",
+        pixel: "",
         no: "",
         projectName: "",
         quantity: "",
@@ -121,7 +141,7 @@ const AddJob = () => {
 
   return (
     <DashboardLayout>
-      <div className="max-w-5xl mx-auto p-6">
+      <div className="w-full p-6">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold">Add New Job</h1>
         </div>
@@ -133,8 +153,8 @@ const AddJob = () => {
             </CardHeader>
             <CardContent className="p-6 space-y-6">
 
-              {/* Row 1: DATE, CUSTOMER, SIZE MODEL, NO */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Row 1: DATE, CUSTOMER */}
+              <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-4">
                 <div className="space-y-2">
                   <Label>DATE *</Label>
                   <Input
@@ -153,12 +173,25 @@ const AddJob = () => {
                     placeholder="Search customer..."
                   />
                 </div>
+              </div>
+
+              {/* Row 2: MODELS, PIXEL, NO */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label>SIZE MODEL</Label>
-                  <Input
+                  <Label>MODELS</Label>
+                  <ComboboxInput
                     value={formData.sizeModel}
-                    onChange={e => set("sizeModel", e.target.value)}
-                    placeholder="e.g. A4, Custom..."
+                    onValueChange={v => set("sizeModel", v)}
+                    options={materialTypes.map(m => ({ value: m, label: m }))}
+                    placeholder="Select or type model..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>PIXEL</Label>
+                  <Input
+                    value={formData.pixel}
+                    onChange={e => set("pixel", e.target.value)}
+                    placeholder="e.g. 300dpi"
                   />
                 </div>
                 <div className="space-y-2">
@@ -206,7 +239,7 @@ const AddJob = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>LENGTH (ft)</Label>
+                  <Label>LENGTH (mm)</Label>
                   <Input
                     type="number"
                     min="0"
@@ -217,7 +250,7 @@ const AddJob = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>WIDTH (ft)</Label>
+                  <Label>WIDTH (mm)</Label>
                   <Input
                     type="number"
                     min="0"
@@ -245,7 +278,7 @@ const AddJob = () => {
               </div>
 
               {/* Calculated Summary */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-2xl border-2 border-green-400 mt-2">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-2xl border-2 border-green-400 mt-2">
                 <div className="text-center">
                   <p className="text-sm text-muted-foreground font-medium uppercase tracking-wide">TOT SIZE (sq ft)</p>
                   <p className="text-2xl font-bold text-blue-700">{fmt(totSize)}</p>
@@ -253,12 +286,6 @@ const AddJob = () => {
                 <div className="text-center">
                   <p className="text-sm text-muted-foreground font-medium uppercase tracking-wide">TOT SQFT</p>
                   <p className="text-2xl font-bold text-indigo-700">{fmt(totSqft)}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground font-medium uppercase tracking-wide">PRICE (₹)</p>
-                  <p className="text-2xl font-bold text-orange-700">
-                    {price > 0 ? `₹${price.toLocaleString("en-IN", { maximumFractionDigits: 2 })}` : "—"}
-                  </p>
                 </div>
                 <div className="text-center">
                   <p className="text-sm text-muted-foreground font-medium uppercase tracking-wide">TOTAL AMOUNT (₹)</p>
